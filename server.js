@@ -1,15 +1,16 @@
 import express from "express";
 import fetch from "node-fetch";
 import NodeCache from "node-cache";
-import YTDlpWrap from "yt-dlp-wrap";
+import pkg from "yt-dlp-wrap";              // <-- tek fark
 
+const YTDlpWrap = pkg.default || pkg;       // <-- ESM/CJS uyumluluk hilesi
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PLAYLIST_URL = process.env.PLAYLIST_URL;
-const YT_DISABLE = process.env.YT_DISABLE === "1"; // YouTube işlemesini kapatmak istersen 1 yap
+const YT_DISABLE = process.env.YT_DISABLE === "1";
 
-const cache = new NodeCache({ stdTTL: 60 * 60 }); // 1 saat
-const ytdlp = new YTDlpWrap(); // yt-dlp binary'sini gerekirse indirir
+const cache = new NodeCache({ stdTTL: 60 * 60 });
+const ytdlp = new YTDlpWrap();              // artık kesin constructor
 
 // Basit sağlık kontrolü
 app.get("/health", (_, res) => res.status(200).send("OK"));
