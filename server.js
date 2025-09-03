@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const PLAYLIST_URL = process.env.PLAYLIST_URL;
 
-const cache = new NodeCache({ stdTTL: 60 * 60 });
+const cache = new NodeCache({ stdTTL: 60 * 60 }); // 1 saat cache
 
 app.get("/", (_, res) => {
   res.type("text/plain").send("BarisHA M3U Maker ✅ /m3u ile liste verilir.");
@@ -36,14 +36,12 @@ app.get("/m3u", async (req, res) => {
         if (!streamUrl) {
           const out = await ytdlp(url, {
             getUrl: true,
-            format: 'best[protocol^=m3u8]/best'
+            format: "best[protocol^=m3u8]/best"
           });
           streamUrl = String(out).trim().split(/\r?\n/)[0];
-          if (!/^https?:\/\//i.test(streamUrl)) throw new Error("Stream URL bulunamadı");
           cache.set(ck, streamUrl, 60 * 60);
         }
       } else {
-        // direct: mp4/m3u8 vs.
         streamUrl = url;
       }
 
@@ -64,14 +62,16 @@ app.get("/m3u", async (req, res) => {
   }
 });
 
-function esc(s=""){ return s.replace(/"/g,"'"); }
+function esc(s = "") {
+  return s.replace(/"/g, "'");
+}
 
 async function loadPlaylist() {
   if (!PLAYLIST_URL) throw new Error("PLAYLIST_URL yok.");
   const ck = `pl:${PLAYLIST_URL}`;
   let data = cache.get(ck);
   if (!data) {
-    const r = await fetch(PLAYLIST_URL, { headers: { "Cache-Control": "no-cache" }});
+    const r = await fetch(PLAYLIST_URL, { headers: { "Cache-Control": "no-cache" } });
     if (!r.ok) throw new Error("Playlist indirilemedi: " + r.status);
     data = await r.json();
     cache.set(ck, data, 60);
