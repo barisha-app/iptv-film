@@ -1,17 +1,18 @@
 import express from "express";
 import fetch from "node-fetch";
-import ytdlp from "yt-dlp-exec";
 import NodeCache from "node-cache";
+import YTDlpWrap from "yt-dlp-wrap";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PLAYLIST_URL = process.env.PLAYLIST_URL;
-const YT_DISABLE = process.env.YT_DISABLE === "1"; // YouTube işleme kapatmak için 1 yap
+const YT_DISABLE = process.env.YT_DISABLE === "1";
 
-const cache = new NodeCache({ stdTTL: 60 * 60 }); // 1 saat cache
+const cache = new NodeCache({ stdTTL: 60 * 60 }); // 1 saat
+const ytdlp = new YTDlpWrap(); // binary'i gerekirse indirir
 
 app.get("/health", (_, res) => res.status(200).send("OK"));
-app.get("/",   (_, res) => res.type("text/plain").send("BarisHA M3U Maker ✅  /m3u ile liste verilir."));
+app.get("/", (_, res) => res.type("text/plain").send("BarisHA M3U Maker ✅  /m3u ile liste verilir."));
 
 app.get("/m3u", async (req, res) => {
   try {
@@ -31,28 +32,26 @@ app.get("/m3u", async (req, res) => {
       let streamUrl = null;
 
       if (type === "youtube") {
-        if (YT_DISABLE) {
-          console.warn("[YT] disabled, skipping:", url);
-          continue; // İstersen direct geçmek yerine atlıyoruz
-        }
+        if (YT_DISABLE) continue;
+
         const ck = `yt:${url}`;
         streamUrl = cache.get(ck);
         if (!streamUrl) {
           try {
-            const out = await ytdlp(url, {
-              getUrl: true,
-              format: "best[protocol^=m3u8]/best"
-            });
+            // Önce HLS (m3u8), yoksa best
+            const out = await ytdlp.execPromise([
+              url, "-g", "-f", "best[protocol^=m3u8]/best"
+            ]);
             streamUrl = String(out).trim().split(/\r?\n/)[0];
             if (!/^https?:\/\//i.test(streamUrl)) throw new Error("Geçersiz stream URL");
             cache.set(ck, streamUrl, 60 * 60);
           } catch (err) {
-            console.error("[YT] yt-dlp hata:", err?.message || err);
-            continue; // YT çökerse servisi çökertme, bu öğeyi atla
+            console.error("[YT] yt-dlp error:", err?.message || err);
+            continue; // YouTube'da problem varsa öğeyi atla, servis çökmesin
           }
         }
       } else {
-        streamUrl = url; // mp4/m3u8
+        streamUrl = url; // mp4/m3u8 gibi direkt link
       }
 
       if (!streamUrl) continue;
@@ -88,7 +87,7 @@ async function loadPlaylist() {
     cache.set(ck, data, 60);
   }
   const arr = Array.isArray(data) ? data : (data.items || []);
-  if (!Array.isArray(arr)) throw new Error("Playlist JSON formatı dizi değil.");
+  if (!Array.isArray(arr)) throw new Error("Playlist JSON dizi değil.");
   return arr;
 }
 
