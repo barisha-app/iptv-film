@@ -6,14 +6,18 @@ import YTDlpWrap from "yt-dlp-wrap";
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PLAYLIST_URL = process.env.PLAYLIST_URL;
-const YT_DISABLE = process.env.YT_DISABLE === "1";
+const YT_DISABLE = process.env.YT_DISABLE === "1"; // YouTube işlemesini kapatmak istersen 1 yap
 
 const cache = new NodeCache({ stdTTL: 60 * 60 }); // 1 saat
-const ytdlp = new YTDlpWrap(); // binary'i gerekirse indirir
+const ytdlp = new YTDlpWrap(); // yt-dlp binary'sini gerekirse indirir
 
+// Basit sağlık kontrolü
 app.get("/health", (_, res) => res.status(200).send("OK"));
-app.get("/", (_, res) => res.type("text/plain").send("BarisHA M3U Maker ✅  /m3u ile liste verilir."));
+app.get("/", (_, res) =>
+  res.type("text/plain").send("BarisHA M3U Maker ✅  /m3u ile liste verilir.")
+);
 
+// Ana uç: M3U üret
 app.get("/m3u", async (req, res) => {
   try {
     const items = await loadPlaylist();
@@ -32,13 +36,13 @@ app.get("/m3u", async (req, res) => {
       let streamUrl = null;
 
       if (type === "youtube") {
-        if (YT_DISABLE) continue;
+        if (YT_DISABLE) continue; // geçici olarak YouTube'u atla
 
         const ck = `yt:${url}`;
         streamUrl = cache.get(ck);
         if (!streamUrl) {
           try {
-            // Önce HLS (m3u8), yoksa best
+            // Önce HLS (m3u8), yoksa en iyi kalite
             const out = await ytdlp.execPromise([
               url, "-g", "-f", "best[protocol^=m3u8]/best"
             ]);
@@ -47,11 +51,12 @@ app.get("/m3u", async (req, res) => {
             cache.set(ck, streamUrl, 60 * 60);
           } catch (err) {
             console.error("[YT] yt-dlp error:", err?.message || err);
-            continue; // YouTube'da problem varsa öğeyi atla, servis çökmesin
+            continue; // YouTube'da sorun varsa öğeyi atla, servis çökmesin
           }
         }
       } else {
-        streamUrl = url; // mp4/m3u8 gibi direkt link
+        // direct: mp4/m3u8 gibi doğrudan link
+        streamUrl = url;
       }
 
       if (!streamUrl) continue;
@@ -74,7 +79,9 @@ app.get("/m3u", async (req, res) => {
   }
 });
 
-function esc(s=""){ return s.replace(/"/g,"'"); }
+function esc(s = "") {
+  return s.replace(/"/g, "'");
+}
 
 async function loadPlaylist() {
   if (!PLAYLIST_URL) throw new Error("PLAYLIST_URL eksik.");
@@ -84,7 +91,7 @@ async function loadPlaylist() {
     const r = await fetch(PLAYLIST_URL, { headers: { "Cache-Control": "no-cache" }});
     if (!r.ok) throw new Error(`Playlist indirilemedi: HTTP ${r.status}`);
     data = await r.json();
-    cache.set(ck, data, 60);
+    cache.set(ck, data, 60); // 1 dk
   }
   const arr = Array.isArray(data) ? data : (data.items || []);
   if (!Array.isArray(arr)) throw new Error("Playlist JSON dizi değil.");
